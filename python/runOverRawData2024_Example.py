@@ -22,7 +22,9 @@ process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 
 
 from Configuration.AlCa.GlobalTag import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, '141X_dataRun3_Prompt_frozen_v3', '')
+#replace GT w/ candidate
+#process.GlobalTag = GlobalTag(process.GlobalTag, '141X_dataRun3_Prompt_frozen_v3', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, '141X_dataRun3_Prompt_Candidate_2024_10_08_09_42_50', '')
 
 
 # needed to supress error from cmssw 14
@@ -30,14 +32,16 @@ process.add_(cms.Service("AdaptorConfig", native=cms.untracked.vstring("root")))
 
 # To change the number of events, change this part
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(-1),
+    input = cms.untracked.int32(1000),
     output = cms.optional.untracked.allowed(cms.int32,cms.PSet)
 )
 
 # Input source
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
-        '/store/data/Run2024G/ZeroBias/RAW/v1/000/384/797/00000/984ca912-94be-4de8-8b40-c99f13865a00.root'
+        #Replace file with our agreed input
+        #        '/store/data/Run2024G/ZeroBias/RAW/v1/000/384/797/00000/984ca912-94be-4de8-8b40-c99f13865a00.root'
+        '/store/hidata/HIRun2023A/HIForward0/RAW/v1/000/375/697/00000/3cc42004-7d46-467d-89db-d04005b11227.root'
     )
 )
 
@@ -115,4 +119,5 @@ process.schedule.append(process.zdcanalyzer_step)
 #=======================================================================
 
 
-#MassReplaceInputTag(process, new="rawDataRepacker", old="rawDataCollector")
+#UNCOMMENT HERE TO WORK WITH THE LATEST GREATEST
+MassReplaceInputTag(process, new="rawDataRepacker", old="rawDataCollector")
