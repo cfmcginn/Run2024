@@ -28,32 +28,34 @@ process.GlobalTag.globaltag = GT
 
 # ==================================================================
 # ==================== modification needed for 2023 data ===========
-from CondCore.CondDB.CondDB_cfi import *
-process.es_pool = cms.ESSource("PoolDBESSource",
-    timetype = cms.string('runnumber'),
-    toGet = cms.VPSet(
-        cms.PSet(
-            record = cms.string("HcalElectronicsMapRcd"),
-            tag = cms.string("HcalElectronicsMap_2021_v2.0_data")
-        )
-    ),
-    connect = cms.string('frontier://FrontierProd/CMS_CONDITIONS'),
-        authenticationMethod = cms.untracked.uint32(1)
-    )
+#We no longer want to grab the emap from txt file
 
-process.es_prefer = cms.ESPrefer('HcalTextCalibrations', 'es_ascii')
-process.es_ascii = cms.ESSource(
-    'HcalTextCalibrations',
-    input = cms.VPSet(
-        cms.PSet(
-
-            object = cms.string('ElectronicsMap'),
-            #Replacing old emap file input
-#            file = cms.FileInPath("emap_2023_newZDC_v3.txt")
-            file = cms.FileInPath("emap_2023_newZDC.txt")
-             )
-        )
-    )
+#from CondCore.CondDB.CondDB_cfi import *
+#process.es_pool = cms.ESSource("PoolDBESSource",
+#    timetype = cms.string('runnumber'),
+#    toGet = cms.VPSet(
+#        cms.PSet(
+#            record = cms.string("HcalElectronicsMapRcd"),
+#            tag = cms.string("HcalElectronicsMap_2021_v2.0_data")
+#        )
+#    ),
+#    connect = cms.string('frontier://FrontierProd/CMS_CONDITIONS'),
+#        authenticationMethod = cms.untracked.uint32(1)
+#    )
+#
+#process.es_prefer = cms.ESPrefer('HcalTextCalibrations', 'es_ascii')
+#process.es_ascii = cms.ESSource(
+#    'HcalTextCalibrations',
+#    input = cms.VPSet(
+#        cms.PSet(
+#
+#            object = cms.string('ElectronicsMap'),
+#            #Replacing old emap file input
+##            file = cms.FileInPath("emap_2023_newZDC_v3.txt")
+#            file = cms.FileInPath("emap_2023_newZDC.txt")
+#             )
+#        )
+#    )
 # =======================================================================
 
 # To change the number of events, change this part
@@ -215,6 +217,11 @@ process.etSumZdcProducer = cms.EDProducer('L1TZDCProducer',
                                           bxFirst = cms.int32(-2),
                                           bxLast = cms.int32(3)
 )
+
+#Via Hannah, for the simHcal collection
+process.simHcalTriggerPrimitiveDigis.inputLabel = cms.VInputTag("hcalDigis", "hcalDigis:ZDC")
+process.simHcalTriggerPrimitiveDigis.inputUpgradeLabel = cms.VInputTag("hcalDigis", "hcalDigis:ZDC")
+
 
 process.etSumZdc = cms.Path(process.etSumZdcProducer)
 process.schedule.append(process.etSumZdc)
