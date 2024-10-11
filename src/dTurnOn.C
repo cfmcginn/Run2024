@@ -13,6 +13,9 @@
 #include "TTreeReader.h"
 #include "TTreeReaderValue.h"
 
+//Temp choice, nasty pathing
+#include "/afs/cern.ch/work/c/cmcginn/private/Projects/UPCopenHFanalysis/include/etree.h"
+
 int dTurnOn(std::string inFileName, std::string saveTag = "NoTag")
 {
   gSystem->mkdir("output");
@@ -29,6 +32,17 @@ int dTurnOn(std::string inFileName, std::string saveTag = "NoTag")
 
   TH1D* dPtDenom_h = new TH1D("dPtDenom_h", ";D p_{T} (GeV);Counts", nPtBins, ptBins);
   TH1D* dPtNum_h[nJtPtThresh];
+
+  const Int_t nTrkBins = 60;
+  const Int_t nTrkMin = 0;
+  const Int_t nTrkMax = 240;
+
+  const Double_t trkPtMin = 0.5;
+  const Double_t trkAbsEtaMax = 2.4;
+  
+  TH1D* nTrkWithDDenom_h = new TH1D("nTrkWithDDenom_h", ";N_{trk};Counts", nTrkBins, nTrkMin, nTrkMax);
+  TH1D* nTrkWithDNum_h[nJtPtThresh];
+
   config_p->SetValue("NJTPTTHRESH", nJtPtThresh);
   
   for(Int_t jI = 0; jI < nJtPtThresh; ++jI){
@@ -37,9 +51,16 @@ int dTurnOn(std::string inFileName, std::string saveTag = "NoTag")
 
     dPtNum_h[jI] = new TH1D(histName.c_str(), title.c_str(), nPtBins, ptBins);
     config_p->SetValue(("JTPTTHRESH." + std::to_string(jI)).c_str(), jtPtThresh[jI]);
+
+    histName = Form("nTrkWithDNum_Jt%d_h", (Int_t)jtPtThresh[jI]);
+    title = Form(";N_{trk};Counts (L1 Jet E_{T} > %d GeV)", (Int_t)jtPtThresh[jI]);
+
+    nTrkWithDNum_h[jI] = new TH1D(histName.c_str(), title.c_str(), nTrkBins, nTrkMin, nTrkMax);
   }
 
   config_p->SetValue("SAVETAG", saveTag.c_str());
+  config_p->SetValue("TRKPTMIN", trkPtMin);
+  config_p->SetValue("TRKABSETAMAX", trkAbsEtaMax);
   
   //Create a file list from the input, root or txt allowed
   std::vector<std::string> fileList;
@@ -59,6 +80,13 @@ int dTurnOn(std::string inFileName, std::string saveTag = "NoTag")
     return 1;
   }
 
+  //Create the etree for gap testing
+  hfupc::etree* etr = new hfupc::etree();
+  const float gap_gapEMinMinus = 8.6;
+  const float gap_gapEMinPlus = 9.2;
+  etr->setRapidityGapEMinMinus(gap_gapEMinMinus);
+  etr->setRapidityGapEMinPlus(gap_gapEMinPlus);
+  
   //pre-parse files for totalnEntries, convenient counting
   ULong64_t totalEntries = 0;
   std::cout << "Processing " << fileList.size() << " files..." << std::endl;
@@ -82,9 +110,43 @@ int dTurnOn(std::string inFileName, std::string saveTag = "NoTag")
   for(unsigned fI = 0; fI < fileList.size(); ++fI){
     //grab file, l1 and dtrees
     TFile* inFile_p = new TFile(fileList[fI].c_str(), "READ");
+    TTree* pfTree_p = (TTree*)inFile_p->Get("particleFlowAnalyser/pftree");
+    TTree* hltTree_p = (TTree*)inFile_p->Get("hltanalysis/HltTree");
     TTree* l1Tree_p = (TTree*)inFile_p->Get("l1UpgradeEmuTree/L1UpgradeTree");
     TTree* dTree_p = (TTree*)inFile_p->Get("Dfinder/ntDkpi");
+    TTree* trkTree_p = (TTree*)inFile_p->Get("ppTracks/trackTree");    
 
+    //Handle pf tree branches
+    std::vector<float>* pfE_p=nullptr;
+    std::vector<float>* pfPt_p=nullptr;
+    std::vector<float>* pfEta_p=nullptr;
+    std::vector<int>* pfId_p=nullptr;
+
+    pfTree_p->SetBranchStatus("*", 0);
+    pfTree_p->SetBranchStatus("pfE", 1);
+    pfTree_p->SetBranchStatus("pfPt", 1);
+    pfTree_p->SetBranchStatus("pfEta", 1);
+    pfTree_p->SetBranchStatus("pfId", 1);
+
+    pfTree_p->SetBranchAddress("pfE", &pfE_p);
+    pfTree_p->SetBranchAddress("pfPt", &pfPt_p);
+    pfTree_p->SetBranchAddress("pfEta", &pfEta_p);
+    pfTree_p->SetBranchAddress("pfId", &pfId_p);
+    
+    //Handle HLT tree branches
+    Int_t HLT_HIUPC_ZDC1nOR_MinPixelCluster400_MaxPixelCluster10000_v8;
+    Int_t HLT_HIUPC_ZDC1nOR_SinglePixelTrackLowPt_MaxPixelCluster400_v8;
+    Int_t HLT_HIUPC_ZDC1nOR_SinglePixelTrack_MaxPixelTrack_v8;
+
+    hltTree_p->SetBranchStatus("*", 0);
+    hltTree_p->SetBranchStatus("HLT_HIUPC_ZDC1nOR_MinPixelCluster400_MaxPixelCluster10000_v8", 1);
+    hltTree_p->SetBranchStatus("HLT_HIUPC_ZDC1nOR_SinglePixelTrackLowPt_MaxPixelCluster400_v8", 1);
+    hltTree_p->SetBranchStatus("HLT_HIUPC_ZDC1nOR_SinglePixelTrack_MaxPixelTrack_v8", 1);
+
+    hltTree_p->SetBranchAddress("HLT_HIUPC_ZDC1nOR_MinPixelCluster400_MaxPixelCluster10000_v8", &HLT_HIUPC_ZDC1nOR_MinPixelCluster400_MaxPixelCluster10000_v8);
+    hltTree_p->SetBranchAddress("HLT_HIUPC_ZDC1nOR_SinglePixelTrackLowPt_MaxPixelCluster400_v8", &HLT_HIUPC_ZDC1nOR_SinglePixelTrackLowPt_MaxPixelCluster400_v8);
+    hltTree_p->SetBranchAddress("HLT_HIUPC_ZDC1nOR_SinglePixelTrack_MaxPixelTrack_v8", &HLT_HIUPC_ZDC1nOR_SinglePixelTrack_MaxPixelTrack_v8);
+    
     //Handle l1 tree jet branches
     TTreeReader l1Reader(l1Tree_p);
     TTreeReaderValue<std::vector<float> > jetEt(l1Reader, "jetEt");
@@ -112,15 +174,43 @@ int dTurnOn(std::string inFileName, std::string saveTag = "NoTag")
     dTree_p->SetBranchAddress("Dmass", Dmass);
     dTree_p->SetBranchAddress("Dy", Dy);
 
+    //handle trkTree branches
+    std::vector<float>* trkPt_p = nullptr;
+    std::vector<float>* trkEta_p = nullptr;
+    std::vector<bool>* highPurity_p = nullptr;
+
+    trkTree_p->SetBranchStatus("*", 0);
+    trkTree_p->SetBranchStatus("trkPt", 1);
+    trkTree_p->SetBranchStatus("trkEta", 1);
+    trkTree_p->SetBranchStatus("highPurity", 1);
+
+    trkTree_p->SetBranchAddress("trkPt", &trkPt_p);
+    trkTree_p->SetBranchAddress("trkEta", &trkEta_p);
+    trkTree_p->SetBranchAddress("highPurity", &highPurity_p);
+    
     //Process entries in file
     const ULong64_t nEntries = l1Tree_p->GetEntries();
     for(ULong64_t entry = 0; entry < nEntries; ++entry){
       if(currEntry%nPrint == 0) std::cout << "  Entry " << currEntry << "/" << totalEntries << std::endl;
+      ++currEntry;
 
-      //      l1Tree_p->GetEntry(entry);      
+      pfTree_p->GetEntry(entry);
+      hltTree_p->GetEntry(entry);      
       dTree_p->GetEntry(entry);
+      trkTree_p->GetEntry(entry);      
       l1Reader.Next();
 
+      bool goodEvent = HLT_HIUPC_ZDC1nOR_MinPixelCluster400_MaxPixelCluster10000_v8;
+      goodEvent = goodEvent || HLT_HIUPC_ZDC1nOR_SinglePixelTrackLowPt_MaxPixelCluster400_v8;
+      goodEvent = goodEvent || HLT_HIUPC_ZDC1nOR_SinglePixelTrack_MaxPixelTrack_v8;
+      
+      if(!goodEvent) continue;
+
+      etr->calcRapidityGapsInput(pfE_p, pfPt_p, pfEta_p, pfId_p);
+      bool rapidityGapPlus = etr->rapidityGapPlus();
+      bool rapidityGapMinus = etr->rapidityGapMinus();
+      if(!rapidityGapPlus && !rapidityGapMinus) continue;
+      
       //Find the leading dpt
       Float_t leadingDPt = -1.0;      
       for(Int_t dI = 0; dI < Dsize; ++dI){
@@ -149,18 +239,30 @@ int dTurnOn(std::string inFileName, std::string saveTag = "NoTag")
 	leadingJetEt = (*jetEt)[lI];
       }
 
+      Int_t nTrkHP = 0;
+      for(unsigned int tI = 0; tI < trkPt_p->size(); ++tI){
+	if(trkPt_p->at(tI) < trkPtMin) continue;
+	if(TMath::Abs(trkEta_p->at(tI)) > trkAbsEtaMax) continue;
+	if(!highPurity_p->at(tI)) continue;
+
+	++nTrkHP;
+      }
+
+      Int_t nTrkHPForFill = nTrkHP;
+      if(nTrkHP >= nTrkMax) nTrkHPForFill = nTrkMax - 1;
+      
       //fill histograms
       if(leadingDPt > 0.0){
 	dPtDenom_h->Fill(leadingDPt);
+	nTrkWithDDenom_h->Fill(nTrkHPForFill);
 
 	for(Int_t jI = 0; jI < nJtPtThresh; ++jI){
 	  if(leadingJetEt >= jtPtThresh[jI]){
 	    dPtNum_h[jI]->Fill(leadingDPt);
+	    nTrkWithDNum_h[jI]->Fill(nTrkHPForFill);
 	  }
 	}
       }
-
-      ++currEntry;
     }
     
     inFile_p->Close();
@@ -173,6 +275,11 @@ int dTurnOn(std::string inFileName, std::string saveTag = "NoTag")
   dPtDenom_h->Write("", TObject::kOverwrite);
   for(Int_t jI = 0; jI < nJtPtThresh; ++jI){
     dPtNum_h[jI]->Write("", TObject::kOverwrite);
+  }
+
+  nTrkWithDDenom_h->Write("", TObject::kOverwrite);
+  for(Int_t jI = 0; jI < nJtPtThresh; ++jI){
+    nTrkWithDNum_h[jI]->Write("", TObject::kOverwrite);
   }
 
   config_p->Write("config", TObject::kOverwrite); 
